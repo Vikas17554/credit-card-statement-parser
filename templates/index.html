@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Credit Card Statement Parser</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .upload-area { border: 2px dashed #ccc; padding: 40px; text-align: center; margin: 20px 0; }
+        .upload-area.dragover { border-color: #007bff; background: #f8f9fa; }
+        .btn { background: #007bff; color: white; padding: 10px 20px; border: none; cursor: pointer; }
+        .result { margin-top: 20px; padding: 20px; background: #f8f9fa; display: none; }
+        .error { color: red; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Credit Card Statement Parser</h1>
+    <p>Upload your credit card statement PDF to extract important information</p>
+    
+    <div class="upload-area" id="uploadArea">
+        <p>Drag & drop your PDF file here or click to browse</p>
+        <input type="file" id="fileInput" accept=".pdf" style="display: none;">
+        <button class="btn" onclick="document.getElementById('fileInput').click()">Select PDF</button>
+    </div>
+    
+    <div class="result" id="result">
+        <h3>Extracted Information:</h3>
+        <div id="resultContent"></div>
+    </div>
+    
+    <div class="error" id="error"></div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const result = document.getElementById('result');
+        const resultContent = document.getElementById('resultContent');
+        const error = document.getElementById('error');
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            if (file.type !== 'application/pdf') {
+                showError('Please upload a PDF file');
+                return;
+            }
+
+            error.textContent = '';
+            result.style.display = 'none';
+            uploadArea.innerHTML = '<p>Processing... Please wait</p>';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    showResult(data);
+                }
+            })
+            .catch(err => {
+                showError('Upload failed: ' + err.message);
+            })
+            .finally(() => {
+                uploadArea.innerHTML = `
+                    <p>Drag & drop your PDF file here or click to browse</p>
+                    <button class="btn" onclick="document.getElementById('fileInput').click()">Select PDF</button>
+                `;
+            });
+        }
+
+        function showResult(data) {
+            let html = `
+                <p><strong>Bank Issuer:</strong> ${data.issuer || 'Not Found'}</p>
+                <p><strong>Card Last 4 Digits:</strong> ${data.card_last4 || 'Not Found'}</p>
+                <p><strong>Statement Period:</strong> ${data.statement_date_or_cycle || 'Not Found'}</p>
+                <p><strong>Payment Due Date:</strong> ${data.payment_due_date || 'Not Found'}</p>
+                <p><strong>Total Balance:</strong> ${data.total_balance || 'Not Found'}</p>
+            `;
+            
+            if (data.transaction_samples && data.transaction_samples.length > 0) {
+                html += `<p><strong>Sample Transactions:</strong></p><ul>`;
+                data.transaction_samples.forEach(tx => {
+                    html += `<li>${tx}</li>`;
+                });
+                html += `</ul>`;
+            }
+
+            resultContent.innerHTML = html;
+            result.style.display = 'block';
+        }
+
+        function showError(message) {
+            error.textContent = message;
+        }
+    </script>
+</body>
+</html>
